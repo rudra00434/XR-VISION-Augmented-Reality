@@ -59,7 +59,7 @@ html, body {
   opacity: 0; transition: opacity 0.6s ease; pointer-events: none;
 }
 #cam-bg.cam-visible { opacity: 1; }
-body.cam-active a-scene canvas { background: transparent !important; }
+body.cam-active a-scene canvas { background: transparent !important; }`n`na-scene { position: fixed; inset: 0; z-index: 50 !important; }`n#ui-overlay { position: relative; z-index: 100 !important; }
 
 /* ─────────────────────────────────────────────────────────────
    LOADING SCREEN
@@ -173,7 +173,7 @@ body.cam-active a-scene canvas { background: transparent !important; }
   .btn-launch-ar, .btn-launch-vr, .btn-outline { width: 100%; text-align: center; }
   
   /* Semi-transparent 3D model behind text on mobile */
-  .hero-right { position: absolute; inset: 0; opacity: 0.3; z-index: -1; }
+  .hero-right { position: absolute; inset: 0; opacity: 1; z-index: 10; pointer-events: none; }
   .model-frame { border: none; background: none; }
 
   #xr-controls { width: 90%; flex-direction: column; bottom: 20px; border-radius: 15px; }
@@ -225,3 +225,5 @@ body.ticker-active .ticker { opacity: 1; transform: translateY(0); }
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+
