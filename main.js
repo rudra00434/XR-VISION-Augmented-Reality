@@ -11,6 +11,7 @@ const state = {
     cameraActive: false,
     cameraStream: null,
     loaderHidden: false,
+    version: "4.7.0"
 };
 
 const $ = id => document.getElementById(id);
@@ -174,14 +175,20 @@ window.InterfaceManager = (() => {
             const onSceneClick = () => {
                 if (!state.cameraActive) return;
                 
+                // Brute-force placement for v4.7.0
                 helmet.setAttribute('visible', 'true');
                 helmet.object3D.visible = true;
-
-                gsap.fromTo(helmet.object3D.scale, { x: 0, y: 0, z: 0 }, { x: 0.9, y: 0.9, z: 0.9, duration: 1.2, ease: "elastic.out(1, 0.5)" });
+                helmet.setAttribute('scale', '0.9 0.9 0.9');
+                helmet.setAttribute('position', '0 1.2 -1.5');
+                
+                // Animation after hard-set
+                gsap.from(helmet.object3D.scale, { x: 0, y: 0, z: 0, duration: 1, ease: "back.out(1.7)" });
+                
                 this.showSyncGlow();
-                this.showToast('HELMET PLACED · SYNC SECURED');
+                this.showToast('DEVICE SYNCED · OBJECT PROJECTED');
                 this.startRotation();
-
+                
+                console.log("[XR] Helmet Rendered at Focus: (0 1.2 -1.5)");
                 xrScene.removeEventListener('click', onSceneClick);
             };
 
