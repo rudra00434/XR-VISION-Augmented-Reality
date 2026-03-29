@@ -1,6 +1,6 @@
 /**
  * AERO-G1 · Hybrid XR Vision System
- * main.js · v4.1.0 · Premium Logic Refinement
+ * main.js · v4.4.0 · Premium Stable Engine
  */
 
 'use strict';
@@ -8,7 +8,6 @@
 const state = {
     diagnosticActive: false,
     helmetPlaced: false,
-    xrLaunched: false,
     cameraActive: false,
     cameraStream: null,
 };
@@ -42,15 +41,16 @@ const CameraManager = (() => {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                 state.cameraStream = stream;
                 state.cameraActive = true;
-                _videoEl.srcObject = stream;
-                _videoEl.classList.add('cam-visible');
+                if (_videoEl) {
+                    _videoEl.srcObject = stream;
+                    _videoEl.classList.add('cam-visible');
+                }
                 document.body.classList.add('cam-active');
                 _setSceneAlpha(true);
-                InterfaceManager.showToast('LIVE CAMERA FEED ACTIVE');
                 return true;
             } catch (e) {
                 console.error('[Camera] Access denied:', e);
-                InterfaceManager.showToast('CAMERA ERROR: ACCESS DENIED');
+                InterfaceManager.showToast('CAMERA ACCESS DENIED');
                 return false;
             }
         },
@@ -69,8 +69,6 @@ const CameraManager = (() => {
    INTERFACE MANAGER (Hybrid Dual-Mode)
 ───────────────────────────────────────────────────────────── */
 window.InterfaceManager = (() => {
-    let _activeTweens = [];
-
     return {
         async launch(mode) {
             const xrScene = $('xr-scene');
@@ -81,23 +79,14 @@ window.InterfaceManager = (() => {
 
             if (!xrScene) return;
 
-            // 1. UI Preparation with GSAP
+            // 1. UI Preparation (GSAP)
             if (hero) {
-                gsap.to(hero, { 
-                    opacity: 0, 
-                    y: -20, 
-                    duration: 0.6, 
-                    ease: "power4.in",
-                    onComplete: () => hero.style.display = 'none' 
-                });
+                gsap.to(hero, { opacity: 0, y: -20, duration: 0.6, ease: "power4.in", onComplete: () => hero.style.display = 'none' });
             }
 
             xrScene.style.display = 'block';
             xrControls.style.display = 'flex';
-            gsap.fromTo([xrScene, xrControls], 
-                { opacity: 0 }, 
-                { opacity: 1, duration: 1, delay: 0.3, ease: "power2.out" }
-            );
+            gsap.fromTo([xrScene, xrControls], { opacity: 0 }, { opacity: 1, duration: 1, delay: 0.3, ease: "power2.out" });
 
             const isAR = mode === 'ar';
             if (modeLabel) modeLabel.textContent = isAR ? 'MODE: AUGMENTED REALITY' : 'MODE: VIRTUAL GALLERY';
@@ -105,12 +94,11 @@ window.InterfaceManager = (() => {
             _setSceneAlpha(isAR);
             this.startTelemetry();
 
-            // 2. VR/AR Visibility Default
+            // 2. Initial Model State
             if (helmet) {
                 helmet.setAttribute('visible', String(!isAR));
                 if (!isAR) {
-                    // Smooth entry for Gallery mode
-                    gsap.from(helmet.object3D.position, { y: 2, duration: 2, ease: "elastic.out(1, 0.75)" });
+                    gsap.fromTo(helmet.object3D.position, { y: 2, z: -3 }, { y: 1.2, z: -1.8, duration: 2, ease: "elastic.out(1, 0.75)" });
                     this.startRotation();
                 }
             }
@@ -153,9 +141,7 @@ window.InterfaceManager = (() => {
             if (!xrScene) return;
 
             gsap.to([xrScene, xrControls], {
-                opacity: 0,
-                duration: 0.5,
-                ease: "power2.in",
+                opacity: 0, duration: 0.5, ease: "power2.in",
                 onComplete: () => {
                     xrScene.style.display = 'none';
                     xrControls.style.display = 'none';
@@ -180,46 +166,42 @@ window.InterfaceManager = (() => {
             const reticle = $('reticle');
 
             if (!xrScene || !helmet) return;
-
             if (reticle) reticle.setAttribute('visible', 'true');
 
             const onSceneClick = () => {
                 if (!state.cameraActive) return;
                 
                 helmet.setAttribute('visible', 'true');
-                
-                // GSAP Premium Placement Animation
-                gsap.from(helmet.object3D.scale, { x: 0, y: 0, z: 0, duration: 1.2, ease: "elastic.out(1, 0.5)" });
-                gsap.from(helmet.object3D.position, { y: 0.5, duration: 0.8, ease: "power4.out" });
-                
-                this.showToast('HELMET PLACED IN SPACE');
+                helmet.object3D.visible = true;
+
+                gsap.fromTo(helmet.object3D.scale, { x: 0, y: 0, z: 0 }, { x: 0.9, y: 0.9, z: 0.9, duration: 1.2, ease: "elastic.out(1, 0.5)" });
+                this.showSyncGlow();
+                this.showToast('HELMET PLACED · SYNC SECURED');
                 this.startRotation();
-                
+
                 xrScene.removeEventListener('click', onSceneClick);
             };
 
             xrScene.addEventListener('click', onSceneClick);
         },
 
+        showSyncGlow() {
+            const helmet = $('helmet');
+            if (!helmet || !helmet.object3D) return;
+            helmet.object3D.traverse(node => {
+                if (node.isMesh && node.material && node.material.emissive) {
+                    node.material.emissive.setHex(0x00dcff);
+                    gsap.fromTo(node.material, { emissiveIntensity: 0 }, { emissiveIntensity: 2.5, duration: 0.5, yoyo: true, repeat: 3, ease: "sine.inOut" });
+                }
+            });
+        },
+
         startRotation() {
             const helmet = $('helmet');
             if (helmet) {
                 gsap.killTweensOf(helmet.object3D.rotation);
-                gsap.to(helmet.object3D.rotation, { 
-                    y: Math.PI * 2, 
-                    duration: 18, 
-                    repeat: -1, 
-                    ease: "none" 
-                });
-                
-                // Subtle Float
-                gsap.to(helmet.object3D.position, {
-                    y: "+=0.04",
-                    duration: 2.5,
-                    repeat: -1,
-                    yoyo: true,
-                    ease: "power1.inOut"
-                });
+                gsap.to(helmet.object3D.rotation, { y: Math.PI * 2, duration: 20, repeat: -1, ease: "none" });
+                gsap.to(helmet.object3D.position, { y: "+=0.03", duration: 3, repeat: -1, yoyo: true, ease: "power1.inOut" });
             }
         },
 
@@ -231,14 +213,7 @@ window.InterfaceManager = (() => {
         startTelemetry() {
             const track = $('ticker-inner');
             if (!track) return;
-            const items = [
-                'CORE TEMP: 32°C [STABLE]',
-                'XR LATENCY: 1.8 MS',
-                'SIGNAL: 100% [ENCRYPTED]',
-                'SENSORS: ACTIVE [6DOF]',
-                'AERO-G1 SYSTEM: OK',
-                'BATTERY: 98% [NOMINAL]'
-            ];
+            const items = ['CORE TEMP: 32°C [STABLE]', 'XR LATENCY: 1.8 MS', 'SIGNAL: 100% [ENCRYPTED]', 'SENSORS: ACTIVE [6DOF]'];
             track.innerHTML = items.map(t => `<span class="ticker-item">${t}</span>`).join('');
             document.body.classList.add('ticker-active');
             gsap.from('.ticker', { y: 40, opacity: 0, duration: 0.8, ease: "power4.out" });
@@ -268,6 +243,7 @@ window.InterfaceManager = (() => {
 function _setSceneAlpha(on) {
     const xrScene = $('xr-scene');
     const env = $('environment');
+    const lights = $('scene-lights');
     if (!xrScene) return;
 
     if (on) document.body.classList.add('cam-active');
@@ -277,6 +253,8 @@ function _setSceneAlpha(on) {
         env.setAttribute('visible', String(!on));
         env.setAttribute('environment', `active: ${!on}`);
     }
+
+    if (lights) lights.setAttribute('visible', 'true');
 
     const canvas = xrScene.querySelector('canvas');
     if (canvas) {
@@ -289,10 +267,7 @@ function _setSceneAlpha(on) {
    INITIALIZATION
 ───────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
-    const xrScene = $('xr-scene');
-    if (!xrScene) return;
-
-    // Button Bindings
+    // 1. Scene logic
     if ($('launch-ar')) $('launch-ar').onclick = () => window.InterfaceManager.launch('ar');
     if ($('launch-vr')) $('launch-vr').onclick = () => window.InterfaceManager.launch('vr');
     if ($('exit-xr')) $('exit-xr').onclick = () => window.InterfaceManager.exit();
@@ -305,24 +280,12 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // GSAP Inline Preview Rotation
+    // 2. GSAP Inline Preview
     const previewHelmet = $('preview-helmet');
     if (previewHelmet) {
-        // Wait for A-Frame objects to be ready before GSAP targets them
         previewHelmet.addEventListener('model-loaded', () => {
-            gsap.to(previewHelmet.object3D.rotation, { 
-                y: Math.PI * 2, 
-                duration: 15, 
-                repeat: -1, 
-                ease: "none" 
-            });
-            gsap.to(previewHelmet.object3D.position, {
-                y: "-=0.05",
-                duration: 3,
-                repeat: -1,
-                yoyo: true,
-                ease: "power1.inOut"
-            });
+            gsap.to(previewHelmet.object3D.rotation, { y: Math.PI * 2, duration: 15, repeat: -1, ease: "none" });
+            gsap.to(previewHelmet.object3D.position, { y: "-=0.05", duration: 3, repeat: -1, yoyo: true, ease: "power1.inOut" });
         });
     }
 });

@@ -942,7 +942,7 @@
     <div id="loader">
         <div class="loader-scan"></div>
         <div class="loader-logo">AERO<span>-G1</span></div>
-        <div class="loader-tagline">Hybrid XR Vision System · v4.2.1-FIXED</div>
+        <div class="loader-tagline">Hybrid XR Vision System · v4.4.0-STABILIZED</div>
         <div class="loader-bar-track">
             <div class="loader-bar-fill"></div>
         </div>
@@ -1082,10 +1082,10 @@
     </div>
 
     <!-- Full WebXR Scene (hidden until launch) -->
-    <a-scene id="xr-scene" style="display: none;" embedded vr-mode-ui="enabled: false; cardboardModeEnabled: false"
+        <a-scene id="xr-scene" style="display: none;" embedded vr-mode-ui="enabled: false; cardboardModeEnabled: false"
         device-orientation-permission-ui="enabled: false"
         webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: dom-overlay; overlayElement: #ui-overlay;"
-        renderer="antialias: true; alpha: true; colorManagement: true; exposure: 1.2; shadowMapType: pcfsoft"
+        renderer="antialias: true; alpha: true; colorManagement: true; exposure: 1.5; logarithmicDepthBuffer: true;"
         cursor="rayOrigin: mouse" raycaster="objects: .clickable">
 
         <a-assets>
@@ -1094,10 +1094,16 @@
         </a-assets>
 
         <a-entity id="environment"
-            environment="preset: threetowers; ground: hills; groundColor: #111118; groundTexture: walk; active: true; lighting: point; skyType: gradient; skyColor: #000000; horizonColor: #111120; shadow: true; fog: 0.0;"></a-entity>
+            environment="preset: threetowers; ground: hills; groundColor: #111118; active: true; lighting: none; skyType: gradient; skyColor: #000000; horizonColor: #111120; shadow: true; fog: 0.0;"></a-entity>
 
-        <a-light type="ambient" color="#aaccff" intensity="0.4"></a-light>
-        <a-light type="directional" color="#ffffff" intensity="1.4" position="-1 4 3" castShadow="true"></a-light>
+        <!-- Premium v4.4.0 High-Fidelity Lights -->
+        <a-entity id="scene-lights">
+            <a-light type="ambient" color="#ffffff" intensity="0.5"></a-light>
+            <a-light type="hemisphere" color="#ffffff" groundColor="#000000" intensity="1.2"></a-light>
+            <a-light type="directional" color="#00dcff" intensity="1.8" position="2 4 3" castShadow="true"
+                shadow-camera-left="-5" shadow-camera-right="5" shadow-camera-top="5" shadow-camera-bottom="-5"></a-light>
+            <a-light type="point" color="#ff6b2b" intensity="0.8" position="-2 1 1"></a-light>
+        </a-entity>
         <a-light type="point" color="#00dcff" intensity="1.8" position="2 2 1"></a-light>
         <a-light type="point" color="#ff6b2b" intensity="0.6" position="-3 0 2"></a-light>
 
