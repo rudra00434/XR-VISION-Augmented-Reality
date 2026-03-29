@@ -69,6 +69,8 @@ const CameraManager = (() => {
    INTERFACE MANAGER (Hybrid Dual-Mode)
 ───────────────────────────────────────────────────────────── */
 window.InterfaceManager = (() => {
+    let _activeTweens = [];
+
     return {
         async launch(mode) {
             const xrScene = $('xr-scene');
@@ -79,10 +81,23 @@ window.InterfaceManager = (() => {
 
             if (!xrScene) return;
 
-            // 1. UI Preparation
-            if (hero) hero.style.display = 'none';
+            // 1. UI Preparation with GSAP
+            if (hero) {
+                gsap.to(hero, { 
+                    opacity: 0, 
+                    y: -20, 
+                    duration: 0.6, 
+                    ease: "power4.in",
+                    onComplete: () => hero.style.display = 'none' 
+                });
+            }
+
             xrScene.style.display = 'block';
             xrControls.style.display = 'flex';
+            gsap.fromTo([xrScene, xrControls], 
+                { opacity: 0 }, 
+                { opacity: 1, duration: 1, delay: 0.3, ease: "power2.out" }
+            );
 
             const isAR = mode === 'ar';
             if (modeLabel) modeLabel.textContent = isAR ? 'MODE: AUGMENTED REALITY' : 'MODE: VIRTUAL GALLERY';
@@ -91,7 +106,14 @@ window.InterfaceManager = (() => {
             this.startTelemetry();
 
             // 2. VR/AR Visibility Default
-            if (helmet) helmet.setAttribute('visible', String(!isAR));
+            if (helmet) {
+                helmet.setAttribute('visible', String(!isAR));
+                if (!isAR) {
+                    // Smooth entry for Gallery mode
+                    gsap.from(helmet.object3D.position, { y: 2, duration: 2, ease: "elastic.out(1, 0.75)" });
+                    this.startRotation();
+                }
+            }
 
             // 3. Request Session
             if (navigator.xr && isAR) {
@@ -130,14 +152,25 @@ window.InterfaceManager = (() => {
 
             if (!xrScene) return;
 
-            xrScene.style.display = 'none';
-            xrControls.style.display = 'none';
-            if (hero) hero.style.display = 'flex';
+            gsap.to([xrScene, xrControls], {
+                opacity: 0,
+                duration: 0.5,
+                ease: "power2.in",
+                onComplete: () => {
+                    xrScene.style.display = 'none';
+                    xrControls.style.display = 'none';
+                    if (hero) {
+                        hero.style.display = 'flex';
+                        gsap.fromTo(hero, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.8, ease: "back.out(1.7)" });
+                    }
+                }
+            });
 
             if (state.cameraActive) CameraManager.stop();
             if (xrScene.exitVR) xrScene.exitVR();
             
             this.stopTelemetry();
+            this.stopRotation();
             window.dispatchEvent(new Event('resize'));
         },
 
@@ -148,21 +181,51 @@ window.InterfaceManager = (() => {
 
             if (!xrScene || !helmet) return;
 
-            // Show temporary reticle in fallback mode
             if (reticle) reticle.setAttribute('visible', 'true');
 
             const onSceneClick = () => {
                 if (!state.cameraActive) return;
                 
-                // For pseudo-AR, we fix the placement at the current reticle position
                 helmet.setAttribute('visible', 'true');
-                this.showToast('HELMET PLACED IN SPACE');
                 
-                // Cleanup listener but keep reticle as focus
+                // GSAP Premium Placement Animation
+                gsap.from(helmet.object3D.scale, { x: 0, y: 0, z: 0, duration: 1.2, ease: "elastic.out(1, 0.5)" });
+                gsap.from(helmet.object3D.position, { y: 0.5, duration: 0.8, ease: "power4.out" });
+                
+                this.showToast('HELMET PLACED IN SPACE');
+                this.startRotation();
+                
                 xrScene.removeEventListener('click', onSceneClick);
             };
 
             xrScene.addEventListener('click', onSceneClick);
+        },
+
+        startRotation() {
+            const helmet = $('helmet');
+            if (helmet) {
+                gsap.killTweensOf(helmet.object3D.rotation);
+                gsap.to(helmet.object3D.rotation, { 
+                    y: Math.PI * 2, 
+                    duration: 18, 
+                    repeat: -1, 
+                    ease: "none" 
+                });
+                
+                // Subtle Float
+                gsap.to(helmet.object3D.position, {
+                    y: "+=0.04",
+                    duration: 2.5,
+                    repeat: -1,
+                    yoyo: true,
+                    ease: "power1.inOut"
+                });
+            }
+        },
+
+        stopRotation() {
+            const helmet = $('helmet');
+            if (helmet) gsap.killTweensOf([helmet.object3D.rotation, helmet.object3D.position]);
         },
 
         startTelemetry() {
@@ -170,7 +233,7 @@ window.InterfaceManager = (() => {
             if (!track) return;
             const items = [
                 'CORE TEMP: 32°C [STABLE]',
-                'XR LATENCY: 2.1 MS',
+                'XR LATENCY: 1.8 MS',
                 'SIGNAL: 100% [ENCRYPTED]',
                 'SENSORS: ACTIVE [6DOF]',
                 'AERO-G1 SYSTEM: OK',
@@ -178,6 +241,7 @@ window.InterfaceManager = (() => {
             ];
             track.innerHTML = items.map(t => `<span class="ticker-item">${t}</span>`).join('');
             document.body.classList.add('ticker-active');
+            gsap.from('.ticker', { y: 40, opacity: 0, duration: 0.8, ease: "power4.out" });
         },
 
         stopTelemetry() {
@@ -239,5 +303,26 @@ document.addEventListener('DOMContentLoaded', () => {
             $('toggle-diagnostic').classList.toggle('active', state.diagnosticActive);
             InterfaceManager.showToast('DIAGNOSTIC MODE: ' + (state.diagnosticActive ? 'ON' : 'OFF'));
         };
+    }
+
+    // GSAP Inline Preview Rotation
+    const previewHelmet = $('preview-helmet');
+    if (previewHelmet) {
+        // Wait for A-Frame objects to be ready before GSAP targets them
+        previewHelmet.addEventListener('model-loaded', () => {
+            gsap.to(previewHelmet.object3D.rotation, { 
+                y: Math.PI * 2, 
+                duration: 15, 
+                repeat: -1, 
+                ease: "none" 
+            });
+            gsap.to(previewHelmet.object3D.position, {
+                y: "-=0.05",
+                duration: 3,
+                repeat: -1,
+                yoyo: true,
+                ease: "power1.inOut"
+            });
+        });
     }
 });
