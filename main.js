@@ -75,6 +75,7 @@ window.InterfaceManager = (() => {
             const xrControls = $('xr-controls');
             const hero = document.querySelector('.hero');
             const modeLabel = $('xr-mode-label');
+            const helmet = $('helmet');
 
             if (!xrScene) return;
 
@@ -89,7 +90,10 @@ window.InterfaceManager = (() => {
             _setSceneAlpha(isAR);
             this.startTelemetry();
 
-            // 2. Request Session
+            // 2. VR/AR Visibility Default
+            if (helmet) helmet.setAttribute('visible', String(!isAR));
+
+            // 3. Request Session
             if (navigator.xr && isAR) {
                 try {
                     const supported = await navigator.xr.isSessionSupported('immersive-ar');
@@ -111,10 +115,11 @@ window.InterfaceManager = (() => {
                 } catch (e) { console.warn('[XR] Native VR check failed:', e); }
             }
 
-            // 3. Fallback
+            // 4. Fallback (Pseudo-AR)
             if (isAR) {
-                this.showToast('NATIVE XR UNAVAILABLE - CAMERA MODE ACTIVE');
+                this.showToast('SCAN AND CLICK TO PLACE HELMET');
                 CameraManager.request();
+                this._initManualPlacement();
             }
         },
 
@@ -134,6 +139,30 @@ window.InterfaceManager = (() => {
             
             this.stopTelemetry();
             window.dispatchEvent(new Event('resize'));
+        },
+
+        _initManualPlacement() {
+            const xrScene = $('xr-scene');
+            const helmet = $('helmet');
+            const reticle = $('reticle');
+
+            if (!xrScene || !helmet) return;
+
+            // Show temporary reticle in fallback mode
+            if (reticle) reticle.setAttribute('visible', 'true');
+
+            const onSceneClick = () => {
+                if (!state.cameraActive) return;
+                
+                // For pseudo-AR, we fix the placement at the current reticle position
+                helmet.setAttribute('visible', 'true');
+                this.showToast('HELMET PLACED IN SPACE');
+                
+                // Cleanup listener but keep reticle as focus
+                xrScene.removeEventListener('click', onSceneClick);
+            };
+
+            xrScene.addEventListener('click', onSceneClick);
         },
 
         startTelemetry() {
