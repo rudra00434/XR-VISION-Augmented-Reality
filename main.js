@@ -10,6 +10,7 @@ const state = {
     helmetPlaced: false,
     cameraActive: false,
     cameraStream: null,
+    loaderHidden: false,
 };
 
 const $ = id => document.getElementById(id);
@@ -98,6 +99,8 @@ window.InterfaceManager = (() => {
             if (helmet) {
                 helmet.setAttribute('visible', String(!isAR));
                 if (!isAR) {
+                    // Reset scale and position for Gallery mode
+                    helmet.object3D.scale.set(0.9, 0.9, 0.9);
                     gsap.fromTo(helmet.object3D.position, { y: 2, z: -3 }, { y: 1.2, z: -1.8, duration: 2, ease: "elastic.out(1, 0.75)" });
                     this.startRotation();
                 }
@@ -233,6 +236,23 @@ window.InterfaceManager = (() => {
             toast.textContent = msg;
             toast.classList.add('visible');
             setTimeout(() => toast.classList.remove('visible'), 5000);
+        },
+
+        hideLoader() {
+            if (state.loaderHidden) return;
+            state.loaderHidden = true;
+            const loader = $('loader');
+            if (loader) {
+                gsap.to(loader, { 
+                    opacity: 0, 
+                    duration: 1.2, 
+                    ease: "power2.inOut",
+                    onComplete: () => {
+                        loader.style.display = 'none';
+                        loader.classList.add('hidden');
+                    }
+                });
+            }
         }
     };
 })();
@@ -286,6 +306,14 @@ document.addEventListener('DOMContentLoaded', () => {
         previewHelmet.addEventListener('model-loaded', () => {
             gsap.to(previewHelmet.object3D.rotation, { y: Math.PI * 2, duration: 15, repeat: -1, ease: "none" });
             gsap.to(previewHelmet.object3D.position, { y: "-=0.05", duration: 3, repeat: -1, yoyo: true, ease: "power1.inOut" });
+            
+            // Hide loader once the first 3D asset is ready
+            setTimeout(() => window.InterfaceManager.hideLoader(), 500);
         });
     }
+
+    // Safety fallback: Hide loader after a timeout anyway
+    window.onload = () => {
+        setTimeout(() => window.InterfaceManager.hideLoader(), 3000);
+    };
 });
