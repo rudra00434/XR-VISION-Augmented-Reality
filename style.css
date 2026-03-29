@@ -1,0 +1,188 @@
+/* ═══════════════════════════════════════════════════════════════
+   AERO-G1 · Hybrid XR Vision System
+   style.css · v4.0.0 · Mobile Responsive / Premium Dual-Mode
+   
+   Z-INDEX STACK
+   ─────────────
+     0   #particle-canvas       (animated bg dots)
+     5   a-scene (xr/preview)   (3-D WebGL)
+     7   #cam-bg                (live camera video)
+    10   #ui-overlay            (all 2-D UI)
+   100   .app-header            (fixed header)
+   200   .ticker / #cam-hud     (bottom bar / cam readout)
+   300   #xr-controls           (XR session controls)
+   6000  #cam-permission-modal
+   8000  #loader
+═══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Palette */
+  --ink: #03030a;
+  --surface: #08080f;
+  --card: rgba(10, 12, 22, 0.82);
+  --border: rgba(0, 220, 255, 0.14);
+  --border-bright: rgba(0, 220, 255, 0.55);
+  --cyan: #00dcff;
+  --cyan-glow: rgba(0, 220, 255, 0.18);
+  --orange: #ff6b2b;
+  --green: #00ff88;
+  --white: #f0f4ff;
+  --muted: rgba(180, 200, 230, 0.45);
+
+  /* Typography */
+  --font-head: 'Orbitron', sans-serif;
+  --font-body: 'Rajdhani', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+  
+  /* Fluid Scaling */
+  --font-size-hero: clamp(2.2rem, 10vw, 6.5rem);
+  --font-size-h2: clamp(1.6rem, 5vw, 2.8rem);
+  --font-size-body: clamp(0.9rem, 1.5vw, 1.1rem);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  background: var(--ink); color: var(--white);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   CAMERA & AR BACKGROUNDS
+───────────────────────────────────────────────────────────── */
+#cam-bg {
+  position: fixed; inset: 0; z-index: 7;
+  width: 100%; height: 100%; object-fit: cover;
+  opacity: 0; transition: opacity 0.6s ease; pointer-events: none;
+}
+#cam-bg.cam-visible { opacity: 1; }
+body.cam-active a-scene canvas { background: transparent !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   LOADING SCREEN
+───────────────────────────────────────────────────────────── */
+#loader {
+  position: fixed; inset: 0; z-index: 8000;
+  background: var(--ink);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transition: opacity 0.7s ease, visibility 0.7s ease;
+}
+#loader.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+.loader-logo { font-family: var(--font-head); font-size: 3rem; font-weight: 900; color: var(--white); }
+.loader-logo span { color: var(--cyan); }
+.loader-bar-track { width: 240px; height: 2px; background: rgba(255,255,255,0.1); margin-top: 2rem; }
+.loader-bar-fill { height: 100%; background: var(--cyan); width: 0%; animation: loadFill 2s ease forwards; }
+@keyframes loadFill { to { width: 100%; } }
+
+/* ─────────────────────────────────────────────────────────────
+   APP HEADER
+───────────────────────────────────────────────────────────── */
+.app-header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1.4rem 3rem; background: rgba(3, 3, 10, 0.72);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+.logo { font-family: var(--font-head); font-weight: 900; letter-spacing: 0.2rem; }
+.logo span { color: var(--cyan); }
+.header-nav { display: flex; gap: 0.8rem; }
+.nav-pill {
+  font-family: var(--font-mono); font-size: 0.65rem; color: var(--muted);
+  border: 1px solid var(--border); padding: 0.4rem 1rem; border-radius: 4px;
+  cursor: pointer; text-transform: uppercase; transition: 0.2s;
+}
+.nav-pill:hover, .nav-pill.active { color: var(--cyan); border-color: var(--cyan); background: var(--cyan-glow); }
+
+/* ─────────────────────────────────────────────────────────────
+   HERO SECTION
+───────────────────────────────────────────────────────────── */
+.hero {
+  min-height: 100vh; display: flex; align-items: center;
+  padding: 8rem 3rem 4rem; position: relative;
+}
+.hero-grid {
+  display: grid; grid-template-columns: 1fr 1.2fr; gap: 4rem;
+  max-width: 1400px; width: 100%; margin: 0 auto;
+}
+.hero-left { display: flex; flex-direction: column; gap: 2rem; justify-content: center; }
+.hero-title {
+  font-family: var(--font-head); font-size: var(--font-size-hero);
+  font-weight: 900; line-height: 0.95; letter-spacing: -0.02em;
+}
+.hero-title span { display: block; }
+.hero-title .line2 { color: var(--cyan); }
+.hero-desc { font-size: var(--font-size-body); color: var(--muted); line-height: 1.6; max-width: 500px; }
+
+.hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
+
+/* ── BUTTONS ── */
+.btn-launch-ar, .btn-launch-vr, .btn-outline {
+  font-family: var(--font-head); font-size: 0.75rem; font-weight: 700;
+  padding: 1rem 2rem; border-radius: 4px; cursor: pointer;
+  text-transform: uppercase; letter-spacing: 0.15em; transition: 0.3s;
+}
+.btn-launch-ar { background: var(--cyan); color: var(--ink); border: none; box-shadow: 0 0 20px var(--cyan-glow); }
+.btn-launch-vr { background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none; }
+.btn-outline { background: transparent; border: 1px solid var(--border-bright); color: var(--cyan); }
+.btn-launch-ar:hover, .btn-launch-vr:hover { transform: translateY(-3px); filter: brightness(1.1); }
+
+/* ─────────────────────────────────────────────────────────────
+   RIGHT COLUMN (3D Viewport)
+───────────────────────────────────────────────────────────── */
+.hero-right { position: relative; display: flex; align-items: center; justify-content: center; }
+.model-frame {
+  width: 100%; aspect-ratio: 1; max-width: 500px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 220, 255, 0.1), transparent 70%);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   XR HUD & CONTROLS
+───────────────────────────────────────────────────────────── */
+#xr-controls {
+  position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+  z-index: 300; display: none; align-items: center; gap: 1.5rem;
+  background: rgba(8, 8, 15, 0.85); backdrop-filter: blur(15px);
+  padding: 0.8rem 1.5rem; border: 1px solid var(--border-bright); border-radius: 99px;
+}
+.xr-badge { font-family: var(--font-mono); font-size: 0.6rem; color: var(--cyan); letter-spacing: 0.15em; }
+.btn-exit {
+  background: transparent; color: var(--orange); border: 1px solid var(--orange);
+  padding: 0.4rem 1rem; border-radius: 99px; font-size: 0.6rem; cursor: pointer;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   RESPONSIVE OVERRIDES
+───────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .hero-grid { grid-template-columns: 1fr; text-align: center; }
+  .hero-left { align-items: center; }
+  .hero-desc { max-width: 600px; }
+  .hero-right { order: -1; margin-bottom: -3rem; }
+}
+
+@media (max-width: 600px) {
+  .app-header { padding: 1rem 1.5rem; }
+  .header-nav { display: none; } /* Hide complicated nav on micro screens */
+  .hero { padding: 6rem 1.5rem 2rem; }
+  .hero-actions { flex-direction: column; width: 100%; }
+  .btn-launch-ar, .btn-launch-vr, .btn-outline { width: 100%; text-align: center; }
+  
+  /* Semi-transparent 3D model behind text on mobile */
+  .hero-right { position: absolute; inset: 0; opacity: 0.3; z-index: -1; }
+  .model-frame { border: none; background: none; }
+
+  #xr-controls { width: 90%; flex-direction: column; bottom: 20px; border-radius: 15px; }
+}
+
+/* Landscape / Tablet height fix */
+@media (max-height: 500px) and (orientation: landscape) {
+  .app-header { display: none; }
+  .hero { padding: 2rem; }
+  .hero-grid { grid-template-columns: 1fr 1fr; text-align: left; }
+  .hero-title { font-size: 1.8rem; }
+}

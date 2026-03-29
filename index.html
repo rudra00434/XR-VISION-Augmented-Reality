@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AERO-G1 | Hybrid XR Vision</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600&family=Space+Mono:ital@0;1&display=swap"
+        rel="stylesheet" />
+
+    <!--
+    !! MUST run BEFORE A-Frame loads !!
+    On mobile, A-Frame reads navigator.xr the moment it parses the <a-scene>
+    and immediately triggers the Cardboard / WebXR session dialog.
+    We intercept it here so A-Frame sees no XR on mobile and never opens
+    that dialog. Camera AR is handled entirely by our own CameraManager.
+  -->
+    <script>
+            // Disable WebVR polyfill globally before A-Frame loads to prevent Cardboard setup dialog
+            window.AFRAME_WEBVR_POLYFILL_CONFIG = { enabled: false };
+
+            var isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+                ('ontouchstart' in window && window.innerWidth < 1024);
+            if (isMobile) {
+                // 1. We no longer disable navigator.xr here as it breaks modern AR.
+                // A-Frame's UI is now suppressed via the vr-mode-ui component and MutationObserver.
+
+                // 2. MutationObserver — if A-Frame somehow injects the Cardboard
+                //    modal or VR button anyway, nuke it instantly from the DOM.
+                var observer = new MutationObserver(function (mutations) {
+                    mutations.forEach(function (m) {
+                        m.addedNodes.forEach(function (node) {
+                            if (!node.classList) return;
+                            // Cardboard modal / A-Frame dialog
+                            if (node.classList.contains('a-modal') ||
+                                node.classList.contains('a-dialog') ||
+                                node.classList.contains('a-enter-vr') ||
+                                node.classList.contains('a-enter-ar') ||
+                                node.classList.contains('a-enter-vr-button') ||
+                                node.classList.contains('a-enter-ar-button')) {
+                                node.parentNode && node.parentNode.removeChild(node);
+                            }
+                        });
+                    });
+                });
+                observer.observe(document.documentElement, { childList: true, subtree: true });
+
+                // 3. Ensure scenes are configured for transparency and no UI
+                document.addEventListener('DOMContentLoaded', function () {
+                    document.querySelectorAll('a-scene').forEach(function (s) {
+                        s.setAttribute('vr-mode-ui', 'enabled: false; cardboardModeEnabled: false');
+                        s.setAttribute('device-orientation-permission-ui', 'enabled: false');
+                        // Ensure alpha is enabled in the renderer for transparency
+                        var renderer = s.getAttribute('renderer') || '';
+                        if (renderer.indexOf('alpha: true') === -1) {
+                            s.setAttribute('renderer', renderer + (renderer ? '; ' : '') + 'alpha: true');
+                        }
+                    });
+                });
+            }
+    </script>
+
+    <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+    <script
+        src="https://unpkg.com/aframe-environment-component@1.5.0/dist/aframe-environment-component.min.js"></script>
+    <script src="https://unpkg.com/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
+    <script src="main.js"></script>
+    <style>
+        /* NUCLEAR SUPPRESSION - Forcibly hide all A-Frame default UI and setup dialogs */
+        .a-enter-vr, .a-enter-ar, .a-modal, .a-dialog, .a-orientation-modal, .a-loader-title {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+        /* Lock A-Frame canvas to prevent resizing artifacts during transition */
+        a-scene canvas {
+            background: transparent !important;
+        }
+    </style>
+    <style>
+        :root {
+            --ink: #03030a;
+            --surface: #08080f;
+            --card: rgba(10, 12, 22, 0.82);
+            --border: rgba(0, 220, 255, 0.14);
+            --border-bright: rgba(0, 220, 255, 0.55);
+            --cyan: #00dcff;
+            --cyan-dim: rgba(0, 220, 255, 0.6);
+            --cyan-glow: rgba(0, 220, 255, 0.18);
+            --orange: #ff6b2b;
+            --white: #f0f4ff;
+            --muted: rgba(180, 200, 230, 0.45);
+            --scan: rgba(0, 220, 255, 0.03);
+            --font-head: 'Orbitron', sans-serif;
+            --font-body: 'Rajdhani', sans-serif;
+            --font-mono: 'Space Mono', monospace;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            background: var(--ink);
+            color: var(--white);
+            font-family: var(--font-body);
+            overflow-x: hidden;
+            cursor: none;
+        }
+
+        /* ── CUSTOM CURSOR ── */
+        #cursor {
+            position: fixed;
+            z-index: 9999;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--cyan);
+            box-shadow: 0 0 12px var(--cyan), 0 0 28px var(--cyan-dim);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            transition: transform 0.08s, width 0.2s, height 0.2s, opacity 0.2s;
+        }
+
+        #cursor-ring {
+            position: fixed;
+            z-index: 9998;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 1px solid var(--cyan-dim);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            transition: transform 0.22s cubic-bezier(.2, .8, .4, 1), width 0.3s, height 0.3s, opacity 0.2s;
+        }
+
+        body:has(a:hover) #cursor,
+        body:has(button:hover) #cursor {
+            width: 18px;
+            height: 18px;
+            background: var(--orange);
+        }
+
+        body:has(a:hover) #cursor-ring,
+        body:has(button:hover) #cursor-ring {
+            width: 52px;
+            height: 52px;
+            border-color: var(--orange);
+            opacity: 0.5;
+        }
+
+        /* ── LOADING SCREEN ── */
+        #loader {
+            position: fixed;
+            inset: 0;
+            z-index: 8000;
+            background: var(--ink);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.7s ease, visibility 0.7s ease;
+        }
+
+        #loader.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .loader-logo {
+            font-family: var(--font-head);
+            font-size: clamp(2rem, 6vw, 4.5rem);
+            font-weight: 900;
+            letter-spacing: 0.18em;
+            color: var(--white);
+            margin-bottom: 0.25em;
+        }
+
+        .loader-logo span {
+            color: var(--cyan);
+        }
+
+        .loader-tagline {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            color: var(--muted);
+            letter-spacing: 0.25em;
+            text-transform: uppercase;
+            margin-bottom: 3.5rem;
+        }
+
+        .loader-bar-track {
+            width: 280px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.07);
+            border-radius: 99px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .loader-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--cyan), #007bff);
+            box-shadow: 0 0 16px var(--cyan);
+            width: 0%;
+            animation: loadFill 2.2s cubic-bezier(.4, 0, .2, 1) forwards;
+        }
+
+        @keyframes loadFill {
+            to {
+                width: 100%;
+            }
+        }
+
+        .loader-pct {
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            color: var(--cyan-dim);
+            margin-top: 1rem;
+            letter-spacing: 0.15em;
+        }
+
+        .loader-scan {
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(0deg,
+                    transparent, transparent 2px,
+                    var(--scan) 2px, var(--scan) 4px);
+            pointer-events: none;
+            animation: scanDown 8s linear infinite;
+        }
+
+        @keyframes scanDown {
+            0% {
+                background-position: 0 0;
+            }
+
+            100% {
+                background-position: 0 400px;
+            }
+        }
+
+        /* ── PARTICLE CANVAS ── */
+        #particle-canvas {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* ── MAIN UI OVERLAY ── */
+        #ui-overlay {
+            position: relative;
+            z-index: 10;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── NOISE GRAIN OVERLAY ── */
+        #ui-overlay::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            opacity: 0.028;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            background-size: 180px;
+        }
+
+        /* ── SCANLINE OVERLAY ── */
+        #ui-overlay::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 2;
+            pointer-events: none;
+            background: repeating-linear-gradient(to bottom,
+                    transparent, transparent 3px,
+                    rgba(0, 0, 0, 0.07) 3px, rgba(0, 0, 0, 0.07) 4px);
+        }
+
+        /* ── HEADER ── */
+        .app-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.4rem 3rem;
+            border-bottom: 1px solid var(--border);
+            background: rgba(3, 3, 10, 0.72);
+            backdrop-filter: blur(18px);
+        }
+
+        .logo {
+            font-family: var(--font-head);
+            font-size: 1.1rem;
+            font-weight: 900;
+            letter-spacing: 0.25em;
+            color: var(--white);
+        }
+
+        .logo span {
+            color: var(--cyan);
+        }
+
+        .logo sub {
+            font-size: 0.45em;
+            font-weight: 400;
+            vertical-align: super;
+            color: var(--muted);
+            margin-left: 0.4em;
+            letter-spacing: 0.1em;
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 0.6rem;
+            align-items: center;
+        }
+
+        .nav-pill {
+            font-family: var(--font-mono);
+            font-size: 0.68rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--muted);
+            background: transparent;
+            border: 1px solid var(--border);
+            padding: 0.45rem 1.1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: color 0.2s, border-color 0.2s, background 0.2s;
+        }
+
+        .nav-pill:hover {
+            color: var(--cyan);
+            border-color: var(--cyan-dim);
+            background: var(--cyan-glow);
+        }
+
+        .nav-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: var(--font-mono);
+            font-size: 0.62rem;
+            color: var(--muted);
+            letter-spacing: 0.12em;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #00ff88;
+            box-shadow: 0 0 8px #00ff88;
+            animation: pulse 2s ease infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.35;
+            }
+        }
+
+        /* ── HERO SECTION ── */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 8rem 3rem 4rem;
+            position: relative;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            max-width: 1300px;
+            width: 100%;
+            margin: 0 auto;
+            align-items: center;
+        }
+
+        /* Left col */
+        .hero-left {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            width: fit-content;
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--cyan);
+            border: 1px solid var(--border-bright);
+            background: var(--cyan-glow);
+            padding: 0.4rem 0.9rem;
+            border-radius: 3px;
+            animation: fadeUp 0.6s ease both;
+        }
+
+        .hero-badge::before {
+            content: '';
+            width: 5px;
+            height: 5px;
+            background: var(--cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--cyan);
+        }
+
+        .hero-title {
+            font-family: var(--font-head);
+            font-size: clamp(3rem, 7vw, 6.5rem);
+            font-weight: 900;
+            line-height: 0.92;
+            letter-spacing: -0.01em;
+            animation: fadeUp 0.7s 0.1s ease both;
+        }
+
+        .hero-title .line1 {
+            color: var(--white);
+            display: block;
+        }
+
+        .hero-title .line2 {
+            display: block;
+            background: linear-gradient(135deg, var(--cyan) 0%, #007bff 60%, var(--orange) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-desc {
+            font-size: 1.12rem;
+            color: var(--muted);
+            line-height: 1.75;
+            max-width: 460px;
+            animation: fadeUp 0.7s 0.2s ease both;
+        }
+
+        .hero-specs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1px;
+            border: 1px solid var(--border);
+            background: var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+            animation: fadeUp 0.7s 0.3s ease both;
+        }
+
+        .spec-item {
+            background: var(--card);
+            padding: 1rem 1.2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.22rem;
+        }
+
+        .spec-label {
+            font-family: var(--font-mono);
+            font-size: 0.58rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .spec-val {
+            font-family: var(--font-head);
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--white);
+        }
+
+        .spec-val small {
+            font-size: 0.55em;
+            font-weight: 400;
+            color: var(--muted);
+            margin-left: 2px;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            animation: fadeUp 0.7s 0.4s ease both;
+        }
+
+        /* ── BUTTONS ── */
+        .btn-launch {
+            position: relative;
+            overflow: hidden;
+            font-family: var(--font-head);
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--ink);
+            background: var(--cyan);
+            border: none;
+            padding: 1rem 2.4rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.18s, box-shadow 0.18s;
+            box-shadow: 0 0 28px rgba(0, 220, 255, 0.45), 0 4px 24px rgba(0, 0, 0, 0.5);
+        }
+
+        .btn-launch::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.25) 50%, transparent 100%);
+            transform: translateX(-100%);
+            transition: transform 0.45s ease;
+        }
+
+        .btn-launch:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 48px rgba(0, 220, 255, 0.65), 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .btn-launch:hover::before {
+            transform: translateX(100%);
+        }
+
+        .btn-outline {
+            font-family: var(--font-head);
+            font-size: 0.82rem;
+            font-weight: 600;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--cyan);
+            background: transparent;
+            border: 1px solid var(--border-bright);
+            padding: 1rem 2rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, box-shadow 0.2s, transform 0.18s;
+        }
+
+        .btn-outline:hover {
+            background: var(--cyan-glow);
+            box-shadow: 0 0 20px var(--cyan-glow);
+            transform: translateY(-2px);
+        }
+
+        /* Right col — 3D Model Preview Card */
+        .hero-right {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeUp 0.8s 0.15s ease both;
+        }
+
+        .model-frame {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            max-width: 520px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            background: radial-gradient(ellipse 60% 60% at 50% 40%, rgba(0, 150, 200, 0.12) 0%, transparent 70%);
+            box-shadow: 0 0 80px rgba(0, 150, 200, 0.1), inset 0 0 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .model-frame::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            background:
+                linear-gradient(180deg, rgba(3, 3, 10, 0.5) 0%, transparent 30%, transparent 70%, rgba(3, 3, 10, 0.6) 100%),
+                linear-gradient(90deg, rgba(3, 3, 10, 0.4) 0%, transparent 20%, transparent 80%, rgba(3, 3, 10, 0.4) 100%);
+            pointer-events: none;
+        }
+
+        .model-corner {
+            position: absolute;
+            z-index: 5;
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+        }
+
+        .model-corner.tl {
+            top: 14px;
+            left: 14px;
+            border-top: 2px solid var(--cyan);
+            border-left: 2px solid var(--cyan);
+        }
+
+        .model-corner.tr {
+            top: 14px;
+            right: 14px;
+            border-top: 2px solid var(--cyan);
+            border-right: 2px solid var(--cyan);
+        }
+
+        .model-corner.bl {
+            bottom: 14px;
+            left: 14px;
+            border-bottom: 2px solid var(--cyan);
+            border-left: 2px solid var(--cyan);
+        }
+
+        .model-corner.br {
+            bottom: 14px;
+            right: 14px;
+            border-bottom: 2px solid var(--cyan);
+            border-right: 2px solid var(--cyan);
+        }
+
+        .model-hud-top {
+            position: absolute;
+            top: 22px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            font-family: var(--font-mono);
+            font-size: 0.58rem;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--cyan-dim);
+        }
+
+        .model-hud-bottom {
+            position: absolute;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            font-family: var(--font-mono);
+            font-size: 0.58rem;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .scan-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            z-index: 4;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--cyan-dim), transparent);
+            animation: scanY 3.5s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes scanY {
+
+            0%,
+            100% {
+                top: 10%;
+                opacity: 0;
+            }
+
+            10% {
+                opacity: 1;
+            }
+
+            90% {
+                opacity: 0.6;
+            }
+
+            95% {
+                top: 90%;
+                opacity: 0;
+            }
+        }
+
+        /* The model viewer inside */
+        model-viewer.inline-model {
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            --poster-color: transparent;
+        }
+
+        /* Fallback if model-viewer not loaded: use a-scene */
+        .model-fallback {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ── FEATURE STRIP ── */
+        .feature-strip {
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            background: var(--card);
+            backdrop-filter: blur(12px);
+            padding: 1.6rem 3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3rem;
+            flex-wrap: wrap;
+            overflow: hidden;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: var(--muted);
+            font-family: var(--font-mono);
+            font-size: 0.68rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .feature-icon {
+            font-size: 1.1rem;
+            color: var(--cyan);
+            filter: drop-shadow(0 0 6px var(--cyan));
+        }
+
+        .strip-divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border);
+        }
+
+        /* ── XR ACTIVE PANEL ── */
+        #xr-controls {
+            display: none;
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 300;
+            flex-direction: row;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(3, 3, 10, 0.85);
+            border: 1px solid var(--border-bright);
+            border-radius: 8px;
+            padding: 0.9rem 1.6rem;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 0 40px rgba(0, 220, 255, 0.2), 0 8px 40px rgba(0, 0, 0, 0.6);
+        }
+
+        .xr-badge {
+            font-family: var(--font-mono);
+            font-size: 0.62rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--cyan);
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+
+        .xr-badge::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--cyan);
+            box-shadow: 0 0 10px var(--cyan);
+            animation: pulse 1.2s ease infinite;
+        }
+
+        .btn-exit {
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--orange);
+            background: transparent;
+            border: 1px solid rgba(255, 107, 43, 0.4);
+            padding: 0.4rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-exit:hover {
+            background: rgba(255, 107, 43, 0.12);
+            box-shadow: 0 0 16px rgba(255, 107, 43, 0.3);
+        }
+
+        /* ── A-SCENE ── */
+        #xr-scene {
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 50 !important;
+        }
+
+        /* ── ANIMATIONS ── */
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(24px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ── TICKER ── */
+        .ticker {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 200;
+            height: 30px;
+            border-top: 1px solid var(--border);
+            background: rgba(3, 3, 10, 0.88);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+        }
+
+        .ticker-label {
+            flex-shrink: 0;
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            letter-spacing: 0.2em;
+            color: var(--cyan);
+            padding: 0 1.2rem;
+            border-right: 1px solid var(--border);
+            height: 100%;
+            display: flex;
+            align-items: center;
+            text-transform: uppercase;
+        }
+
+        .ticker-track {
+            flex: 1;
+            overflow: hidden;
+            mask-image: linear-gradient(90deg, transparent 0%, black 6%, black 94%, transparent 100%);
+        }
+
+        .ticker-inner {
+            display: flex;
+            gap: 3rem;
+            align-items: center;
+            white-space: nowrap;
+            animation: tickerScroll 28s linear infinite;
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            color: var(--muted);
+            letter-spacing: 0.14em;
+        }
+
+        @keyframes tickerScroll {
+            0% {
+                transform: translateX(0);
+            }
+
+            100% {
+                transform: translateX(-50%);
+            }
+        }
+
+        .ticker-item {
+            flex-shrink: 0;
+        }
+
+        .ticker-dot {
+            color: var(--cyan);
+            margin: 0 0.5rem;
+        }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 900px) {
+            .hero-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-right {
+                display: none;
+            }
+
+            .app-header {
+                padding: 1.2rem 1.4rem;
+            }
+
+            .hero {
+                padding: 7rem 1.4rem 4rem;
+            }
+
+            .feature-strip {
+                padding: 1.2rem 1.4rem;
+                gap: 1.4rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Cursor -->
+    <div id="cursor"></div>
+    <div id="cursor-ring"></div>
+
+    <!-- Particle Canvas -->
+    <canvas id="particle-canvas"></canvas>
+
+    <!-- Loading Screen -->
+    <div id="loader">
+        <div class="loader-scan"></div>
+        <div class="loader-logo">AERO<span>-G1</span></div>
+        <div class="loader-tagline">Hybrid XR Vision System · v2.4.1</div>
+        <div class="loader-bar-track">
+            <div class="loader-bar-fill"></div>
+        </div>
+        <div class="loader-pct" id="loader-pct">INITIALIZING · 0%</div>
+    </div>
+
+    <!-- Main UI -->
+    <div id="ui-overlay">
+
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">XR<span>VISION</span><sub>™</sub></div>
+            <nav class="header-nav">
+                <button class="nav-pill" id="toggle-diagnostic">Diagnostics</button>
+                <button class="nav-pill" id="cam-nav-btn">📷 Camera</button>
+                <button class="nav-pill">Gallery</button>
+                <button class="nav-pill">Specs</button>
+                <div class="nav-status">
+                    <div class="status-dot"></div>
+                    WebXR Ready
+                </div>
+            </nav>
+        </header>
+
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-grid">
+
+                <!-- Left: copy -->
+                <div class="hero-left">
+                    <div class="hero-badge">Next-Gen · WebXR Platform · 2025</div>
+                    <h1 class="hero-title">
+                        <span class="line1">AERO-G1</span>
+                        <span class="line2">HYBRID</span>
+                    </h1>
+                    <p class="hero-desc">
+                        Experience the flagship helmet in a photorealistic virtual gallery — or anchor it to your real
+                        world with AR hit-testing. No app, no download. Just open your browser and step in.
+                    </p>
+
+                    <div class="hero-specs">
+                        <div class="spec-item">
+                            <span class="spec-label">Display</span>
+                            <span class="spec-val">4K<small>per-eye</small></span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">Refresh</span>
+                            <span class="spec-val">120<small>Hz</small></span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">FOV</span>
+                            <span class="spec-val">220<small>°</small></span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">Latency</span>
+                            <span class="spec-val">4<small>ms</small></span>
+                        </div>
+                    </div>
+
+                    <div class="hero-actions">
+                        <button class="btn-launch-ar" id="launch-ar">
+                            🚀 &nbsp;LIVE AR VISION
+                        </button>
+                        <button class="btn-launch-vr" id="launch-vr">
+                            🥽 &nbsp;VIRTUAL GALLERY
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Right: 3D model via model-viewer fallback -->
+                <div class="hero-right">
+                    <div class="model-frame" id="model-frame">
+                        <div class="model-corner tl"></div>
+                        <div class="model-corner tr"></div>
+                        <div class="model-corner bl"></div>
+                        <div class="model-corner br"></div>
+                        <div class="model-hud-top">OBJECT · AERO-G1 · GLB</div>
+                        <div class="scan-line"></div>
+                        <div class="model-hud-bottom">
+                            <span>ROT 0.00°</span>
+                            <span>|</span>
+                            <span>SCALE 1.0×</span>
+                            <span>|</span>
+                            <span id="poly-count">POLY 150K</span>
+                        </div>
+                        <!-- Embedded mini A-Frame for the inline preview -->
+                        <a-scene id="preview-scene" embedded style="width:100%;height:100%;display:block;"
+                            vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"
+                            renderer="antialias: true; alpha: true; colorManagement: true; exposure: 1.5">
+                            <a-assets>
+                                <a-asset-item id="preview-helmet"
+                                    src="https://modelviewer.dev/shared-assets/models/glTF-Sample-Assets/Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"></a-asset-item>
+                            </a-assets>
+                            <a-light type="ambient" color="#aaccff" intensity="0.6"></a-light>
+                            <a-light type="point" color="#00dcff" intensity="2.5" position="2 3 2"></a-light>
+                            <a-light type="point" color="#ff6b2b" intensity="0.8" position="-2 -1 1"></a-light>
+                            <a-entity gltf-model="#preview-helmet" scale="1.1 1.1 1.1" position="0 0 -2"
+                                animation="property: rotation; from: 0 0 0; to: 0 360 0; dur: 14000; easing: linear; loop: true">
+                            </a-entity>
+                            <a-camera position="0 0 0" look-controls="enabled: false"
+                                wasd-controls="enabled: false"></a-camera>
+                        </a-scene>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Feature Strip -->
+        <div class="feature-strip">
+            <div class="feature-item"><span class="feature-icon">◈</span>WebXR Hit-Test AR</div>
+            <div class="strip-divider"></div>
+            <div class="feature-item"><span class="feature-icon">◈</span>glTF PBR Rendering</div>
+            <div class="strip-divider"></div>
+            <div class="feature-item"><span class="feature-icon">◈</span>Real-time Shadow Casting</div>
+            <div class="strip-divider"></div>
+            <div class="feature-item"><span class="feature-icon">◈</span>6DOF Room-Scale VR</div>
+            <div class="strip-divider"></div>
+            <div class="feature-item"><span class="feature-icon">◈</span>Zero Install Required</div>
+        </div>
+
+        <!-- XR Controls (shown when scene active) -->
+        <div id="xr-controls">
+            <div class="xr-badge" id="xr-mode-label">XR MODE ACTIVE</div>
+            <button class="btn-exit" id="exit-xr">EXIT EXPERIENCE</button>
+        </div>
+
+        <!-- Bottom Ticker -->
+        <div class="ticker">
+            <div class="ticker-label">LIVE</div>
+            <div class="ticker-track">
+                <div class="ticker-inner" id="ticker-inner">
+                    <!-- filled by JS -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Full WebXR Scene (hidden until launch) -->
+    <a-scene id="xr-scene" style="display: none;" embedded vr-mode-ui="enabled: false; cardboardModeEnabled: false"
+        device-orientation-permission-ui="enabled: false"
+        webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: dom-overlay; overlayElement: #ui-overlay;"
+        renderer="antialias: true; alpha: true; colorManagement: true; exposure: 1.2; shadowMapType: pcfsoft"
+        cursor="rayOrigin: mouse" raycaster="objects: .clickable">
+
+        <a-assets>
+            <a-asset-item id="helmet-model"
+                src="https://modelviewer.dev/shared-assets/models/glTF-Sample-Assets/Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"></a-asset-item>
+        </a-assets>
+
+        <a-entity id="environment"
+            environment="preset: threetowers; ground: hills; groundColor: #111118; groundTexture: walk; active: true; lighting: point; skyType: gradient; skyColor: #000000; horizonColor: #111120; shadow: true; fog: 0.0;"></a-entity>
+
+        <a-light type="ambient" color="#aaccff" intensity="0.4"></a-light>
+        <a-light type="directional" color="#ffffff" intensity="1.4" position="-1 4 3" castShadow="true"></a-light>
+        <a-light type="point" color="#00dcff" intensity="1.8" position="2 2 1"></a-light>
+        <a-light type="point" color="#ff6b2b" intensity="0.6" position="-3 0 2"></a-light>
+
+        <a-entity id="reticle" visible="false" geometry="primitive: ring; radiusInner: 0.025; radiusOuter: 0.038"
+            material="color: #00dcff; emissive: #00dcff; emissiveIntensity: 0.6" rotation="-90 0 0">
+        </a-entity>
+
+        <a-entity id="product-root" position="0 1.2 -1.8">
+            <a-entity id="helmet" gltf-model="#helmet-model" scale="0.9 0.9 0.9" class="clickable"
+                animation="property: rotation; to: 0 360 0; dur: 18000; easing: linear; loop: true"
+                shadow="cast: true; receive: true">
+            </a-entity>
+        </a-entity>
+
+        <a-entity id="rig" position="0 0 1">
+            <a-camera id="camera" wasd-controls-enabled="true" look-controls="pointerLockEnabled: false">
+                <a-cursor color="#00dcff" fuse="false"
+                    geometry="primitive: ring; radiusInner: 0.008; radiusOuter: 0.013"
+                    material="color: #00dcff; emissive: #00dcff; emissiveIntensity: 0.8"></a-cursor>
+            </a-camera>
+        </a-entity>
+    </a-scene>
+
+    <script>
+        /* ── CUSTOM CURSOR ── */
+        const cur = document.getElementById('cursor');
+        const curR = document.getElementById('cursor-ring');
+        let mx = window.innerWidth / 2, my = window.innerHeight / 2;
+        let rx = mx, ry = my;
+        document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+        function animCursor() {
+            cur.style.left = mx + 'px'; cur.style.top = my + 'px';
+            rx += (mx - rx) * 0.14; ry += (my - ry) * 0.14;
+            curR.style.left = rx + 'px'; curR.style.top = ry + 'px';
+            requestAnimationFrame(animCursor);
+        }
+        animCursor();
+
+        /* ── PARTICLE CANVAS ── */
+        const canvas = document.getElementById('particle-canvas');
+        const ctx = canvas.getContext('2d');
+        let W, H, particles = [];
+        function resizeCanvas() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        function Particle() {
+            this.x = Math.random() * W;
+            this.y = Math.random() * H;
+            this.r = Math.random() * 1.4 + 0.3;
+            this.vx = (Math.random() - 0.5) * 0.18;
+            this.vy = (Math.random() - 0.5) * 0.18;
+            this.alpha = Math.random() * 0.5 + 0.1;
+        }
+        for (let i = 0; i < 140; i++) particles.push(new Particle());
+
+        function drawParticles() {
+            ctx.clearRect(0, 0, W, H);
+            particles.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+                if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(0,220,255,${p.alpha})`;
+                ctx.fill();
+            });
+            // Draw connection lines for nearby particles
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 90) {
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.strokeStyle = `rgba(0,220,255,${0.07 * (1 - dist / 90)})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(drawParticles);
+        }
+        drawParticles();
+
+        /* ── LOADER ── */
+        const loaderEl = document.getElementById('loader');
+        const pctEl = document.getElementById('loader-pct');
+        let pct = 0;
+        const pctInterval = setInterval(() => {
+            pct = Math.min(100, pct + Math.floor(Math.random() * 8 + 2));
+            pctEl.textContent = `INITIALIZING · ${pct}%`;
+            if (pct >= 100) {
+                clearInterval(pctInterval);
+                pctEl.textContent = 'SYSTEM READY · 100%';
+                setTimeout(() => loaderEl.classList.add('hidden'), 400);
+            }
+        }, 55);
+
+        /* ── TICKER ── */
+        const tickerItems = [
+            'AERO-G1 · WEBXR SHOWCASE',
+            'HIT-TEST AR ENABLED',
+            'PBR MATERIALS ACTIVE',
+            'REALTIME SHADOW MAPS',
+            '6DOF TRACKING READY',
+            'A-FRAME v1.7.0',
+            'WEBGL2 RENDERER',
+            'WASD CONTROLS ACTIVE',
+            'AERO-G1 · WEBXR SHOWCASE',
+            'HIT-TEST AR ENABLED',
+            'PBR MATERIALS ACTIVE',
+            'REALTIME SHADOW MAPS',
+            '6DOF TRACKING READY',
+            'A-FRAME v1.7.0',
+            'WEBGL2 RENDERER',
+            'WASD CONTROLS ACTIVE',
+        ];
+        const tickerInner = document.getElementById('ticker-inner');
+        tickerItems.forEach(t => {
+            const span = document.createElement('span');
+            span.className = 'ticker-item';
+            span.innerHTML = t + '<span class="ticker-dot">◆</span>';
+            tickerInner.appendChild(span);
+        });
+
+        /* ── HUD ROT COUNTER ── */
+        let rot = 0;
+        setInterval(() => {
+            rot = (rot + 0.4) % 360;
+            const el = document.querySelector('.model-hud-bottom span:first-child');
+            if (el) el.textContent = `ROT ${rot.toFixed(2)}°`;
+        }, 50);
+
+        /* ── XR LAUNCH/EXIT (Managed in main.js) ── */
+
+        /* ── HELMET CLICK IN XR ── */
+        const helmet = document.getElementById('helmet');
+        if (helmet) {
+            helmet.addEventListener('click', () => {
+                helmet.setAttribute('animation__scale', {
+                    property: 'scale', from: '0.9 0.9 0.9', to: '1.15 1.15 1.15',
+                    dur: 200, easing: 'easeOutQuad', autoplay: true
+                });
+                setTimeout(() => {
+                    helmet.setAttribute('animation__scale', {
+                        property: 'scale', from: '1.15 1.15 1.15', to: '0.9 0.9 0.9',
+                        dur: 300, easing: 'easeInOutQuad', autoplay: true
+                    });
+                }, 220);
+            });
+        }
+    </script>
+</body>
+
+</html>
