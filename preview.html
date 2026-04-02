@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AERO-G1 Preview</title>
     <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+    <script src="https://unpkg.com/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     <style>
         html,
         body {
@@ -34,34 +35,90 @@
         <a-assets>
             <a-asset-item id="preview-helmet-asset"
                 src="https://modelviewer.dev/shared-assets/models/glTF-Sample-Assets/Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"></a-asset-item>
+            <a-asset-item id="preview-robot-asset"
+                src="https://modelviewer.dev/shared-assets/models/RobotExpressive.glb"></a-asset-item>
         </a-assets>
 
         <a-light type="ambient" color="#aaccff" intensity="0.65"></a-light>
         <a-light type="point" color="#00dcff" intensity="2.5" position="2 3 2"></a-light>
         <a-light type="point" color="#ff6b2b" intensity="0.8" position="-2 -1 1"></a-light>
 
-        <a-entity id="preview-helmet" gltf-model="#preview-helmet-asset" scale="1.1 1.1 1.1" position="0 0 -2">
+        <a-entity id="preview-model" gltf-model="#preview-helmet-asset" scale="1.1 1.1 1.1" position="0 0 -2">
         </a-entity>
         <a-camera position="0 0 0" look-controls="enabled: false" wasd-controls="enabled: false"></a-camera>
     </a-scene>
 
     <script>
-        const previewHelmet = document.getElementById('preview-helmet');
-        let previewReady = false;
+        const MODEL_LIBRARY = {
+            helmet: {
+                assetId: '#preview-helmet-asset',
+                position: '0 0 -2',
+                scale: '1.1 1.1 1.1',
+                bobAmount: 0.05,
+                rotationSpeed: 0.00045,
+                animationMixer: ''
+            },
+            robot: {
+                assetId: '#preview-robot-asset',
+                position: '0 -0.85 -3.2',
+                scale: '0.55 0.55 0.55',
+                bobAmount: 0.08,
+                rotationSpeed: 0.00025,
+                animationMixer: 'clip: *; loop: repeat'
+            }
+        };
 
-        previewHelmet.addEventListener('model-loaded', () => {
+        const previewModel = document.getElementById('preview-model');
+        let previewReady = false;
+        let activeModel = 'helmet';
+
+        function getActiveConfig() {
+            return MODEL_LIBRARY[activeModel] || MODEL_LIBRARY.helmet;
+        }
+
+        function applyModel(modelKey) {
+            if (!MODEL_LIBRARY[modelKey]) return;
+
+            activeModel = modelKey;
+            const config = getActiveConfig();
+            previewReady = false;
+
+            previewModel.setAttribute('gltf-model', config.assetId);
+            previewModel.setAttribute('position', config.position);
+            previewModel.setAttribute('scale', config.scale);
+
+            if (config.animationMixer) {
+                previewModel.setAttribute('animation-mixer', config.animationMixer);
+            } else {
+                previewModel.removeAttribute('animation-mixer');
+            }
+        }
+
+        previewModel.addEventListener('model-loaded', () => {
             previewReady = true;
-            window.parent.postMessage({ type: 'preview-ready' }, '*');
+            window.parent.postMessage({ type: 'preview-ready', model: activeModel }, '*');
         });
 
         function animatePreview(time) {
-            if (previewReady && previewHelmet.object3D) {
-                previewHelmet.object3D.rotation.y = time * 0.00045;
-                previewHelmet.object3D.position.y = Math.sin(time * 0.002) * 0.05;
+            if (previewReady && previewModel.object3D) {
+                const config = getActiveConfig();
+                const [x, y, z] = config.position.split(' ').map(Number);
+
+                previewModel.object3D.rotation.y = time * config.rotationSpeed;
+                previewModel.object3D.position.x = x;
+                previewModel.object3D.position.z = z;
+                previewModel.object3D.position.y = y + Math.sin(time * 0.002) * config.bobAmount;
             }
             requestAnimationFrame(animatePreview);
         }
 
+        window.addEventListener('message', event => {
+            if (event.data && event.data.type === 'set-model') {
+                applyModel(event.data.model);
+            }
+        });
+
+        applyModel(activeModel);
         requestAnimationFrame(animatePreview);
     </script>
 </body>
