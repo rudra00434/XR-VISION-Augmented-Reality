@@ -11,6 +11,8 @@ const state = {
     cameraActive: false,
     cameraStream: null,
     loaderHidden: false,
+    currentMode: null,
+    manualPlacementHandler: null,
     version: "4.7.0"
 };
 
@@ -78,8 +80,9 @@ window.InterfaceManager = (() => {
             const hero = document.querySelector('.hero');
             const modeLabel = $('xr-mode-label');
             const helmet = $('helmet');
+            const productRoot = $('product-root');
 
-            if (!xrScene) return;
+            if (!xrScene || !helmet || !productRoot) return;
 
             // 1. UI Preparation (GSAP)
             if (hero) {
@@ -91,20 +94,22 @@ window.InterfaceManager = (() => {
             gsap.fromTo([xrScene, xrControls], { opacity: 0 }, { opacity: 1, duration: 1, delay: 0.3, ease: "power2.out" });
 
             const isAR = mode === 'ar';
+            state.currentMode = mode;
+            state.helmetPlaced = false;
+            this._teardownManualPlacement();
+            this.stopRotation();
+            this._resetProductModel(mode);
+
             if (modeLabel) modeLabel.textContent = isAR ? 'MODE: AUGMENTED REALITY' : 'MODE: VIRTUAL GALLERY';
-            
+
             _setSceneAlpha(isAR);
             this.startTelemetry();
 
             // 2. Initial Model State
-            if (helmet) {
-                helmet.setAttribute('visible', String(!isAR));
-                if (!isAR) {
-                    // Reset scale and position for Gallery mode
-                    helmet.object3D.scale.set(0.9, 0.9, 0.9);
-                    gsap.fromTo(helmet.object3D.position, { y: 2, z: -3 }, { y: 1.2, z: -1.8, duration: 2, ease: "elastic.out(1, 0.75)" });
-                    this.startRotation();
-                }
+            if (!isAR) {
+                productRoot.setAttribute('visible', 'true');
+                gsap.fromTo(productRoot.object3D.position, { y: 2, z: -3 }, { y: 1.2, z: -1.8, duration: 2, ease: "elastic.out(1, 0.75)" });
+                this.startRotation();
             }
 
             // 3. Request Session
@@ -112,8 +117,8 @@ window.InterfaceManager = (() => {
                 try {
                     const supported = await navigator.xr.isSessionSupported('immersive-ar');
                     if (supported) {
-                        this.showToast('SCAN OVER THE FLOOR FOR PLACEMENT');
-                        xrScene.enterVR();
+                        this.showToast('SCAN THE FLOOR, THEN TAP TO PLACE');
+                        await xrScene.enterVR();
                         return;
                     }
                 } catch (e) { console.warn('[XR] Native AR check failed:', e); }
@@ -123,7 +128,7 @@ window.InterfaceManager = (() => {
                 try {
                     const supported = await navigator.xr.isSessionSupported('immersive-vr');
                     if (supported) {
-                        xrScene.enterVR();
+                        await xrScene.enterVR();
                         return;
                     }
                 } catch (e) { console.warn('[XR] Native VR check failed:', e); }
@@ -131,10 +136,16 @@ window.InterfaceManager = (() => {
 
             // 4. Fallback (Pseudo-AR)
             if (isAR) {
-                this.showToast('SCAN AND CLICK TO PLACE HELMET');
-                CameraManager.request();
-                this._initManualPlacement();
+                this.showToast('NATIVE AR UNAVAILABLE · USING CAMERA FALLBACK');
+                const cameraReady = await CameraManager.request();
+                if (cameraReady) {
+                    this.showToast('SCAN AND CLICK TO PLACE HELMET');
+                    this._initManualPlacement();
+                }
+                return;
             }
+
+            this.showToast('DESKTOP GALLERY ACTIVE');
         },
 
         exit() {
@@ -144,6 +155,9 @@ window.InterfaceManager = (() => {
 
             if (!xrScene) return;
 
+            state.currentMode = null;
+            state.helmetPlaced = false;
+            this._teardownManualPlacement();
             gsap.to([xrScene, xrControls], {
                 opacity: 0, duration: 0.5, ease: "power2.in",
                 onComplete: () => {
@@ -157,42 +171,96 @@ window.InterfaceManager = (() => {
             });
 
             if (state.cameraActive) CameraManager.stop();
-            if (xrScene.exitVR) xrScene.exitVR();
-            
+            _setSceneAlpha(false);
+            if (xrScene.is && xrScene.is('vr-mode') && xrScene.exitVR) xrScene.exitVR();
+
             this.stopTelemetry();
             this.stopRotation();
+            this._resetProductModel();
             window.dispatchEvent(new Event('resize'));
         },
 
         _initManualPlacement() {
             const xrScene = $('xr-scene');
-            const helmet = $('helmet');
-            const reticle = $('reticle');
+            const productRoot = $('product-root');
 
-            if (!xrScene || !helmet) return;
-            if (reticle) reticle.setAttribute('visible', 'true');
+            if (!xrScene || !productRoot) return;
+            this._teardownManualPlacement();
 
             const onSceneClick = () => {
                 if (!state.cameraActive) return;
-                
-                // Brute-force placement for v4.7.0
-                helmet.setAttribute('visible', 'true');
-                helmet.object3D.visible = true;
-                helmet.setAttribute('scale', '0.9 0.9 0.9');
-                helmet.setAttribute('position', '0 1.2 -1.5');
-                
-                // Animation after hard-set
-                gsap.from(helmet.object3D.scale, { x: 0, y: 0, z: 0, duration: 1, ease: "back.out(1.7)" });
-                
+                state.helmetPlaced = true;
+                productRoot.setAttribute('visible', 'true');
+                productRoot.setAttribute('position', '0 1.2 -1.5');
+                productRoot.object3D.scale.set(1, 1, 1);
+
+                gsap.from(productRoot.object3D.scale, { x: 0, y: 0, z: 0, duration: 1, ease: "back.out(1.7)" });
                 this.showSyncGlow();
                 this.showToast('DEVICE SYNCED · OBJECT PROJECTED');
                 this.startRotation();
-                
+
                 console.log("[XR] Helmet Rendered at Focus: (0 1.2 -1.5)");
-                xrScene.removeEventListener('click', onSceneClick);
+                this._teardownManualPlacement();
             };
 
+            state.manualPlacementHandler = onSceneClick;
             xrScene.addEventListener('click', onSceneClick);
+        },
+
+        _teardownManualPlacement() {
+            const xrScene = $('xr-scene');
+
+            if (xrScene && state.manualPlacementHandler) {
+                xrScene.removeEventListener('click', state.manualPlacementHandler);
+            }
+
+            state.manualPlacementHandler = null;
+        },
+
+        _resetProductModel(mode = null) {
+            const productRoot = $('product-root');
+            const helmet = $('helmet');
+
+            if (!productRoot || !helmet) return;
+
+            gsap.killTweensOf(productRoot.object3D.position);
+            gsap.killTweensOf(productRoot.object3D.scale);
+            gsap.killTweensOf(helmet.object3D.rotation);
+
+            productRoot.object3D.position.set(0, 1.2, -1.8);
+            productRoot.object3D.rotation.set(0, 0, 0);
+            productRoot.object3D.scale.set(1, 1, 1);
+            productRoot.setAttribute('position', '0 1.2 -1.8');
+            productRoot.setAttribute('visible', String(mode === 'vr'));
+
+            helmet.object3D.position.set(0, 0, 0);
+            helmet.object3D.rotation.set(0, 0, 0);
+            helmet.object3D.scale.set(0.9, 0.9, 0.9);
+            helmet.setAttribute('position', '0 0 0');
+            helmet.setAttribute('scale', '0.9 0.9 0.9');
+            helmet.setAttribute('visible', 'true');
+        },
+
+        _bindXRSceneEvents() {
+            const xrScene = $('xr-scene');
+
+            if (!xrScene || xrScene.dataset.xrEventsBound === 'true') return;
+            xrScene.dataset.xrEventsBound = 'true';
+
+            xrScene.addEventListener('ar-hit-test-achieved', () => {
+                if (state.currentMode === 'ar' && !state.cameraActive && !state.helmetPlaced) {
+                    this.showToast('TAP TO PLACE HELMET');
+                }
+            });
+
+            xrScene.addEventListener('ar-hit-test-select', () => {
+                if (state.currentMode !== 'ar' || state.cameraActive || state.helmetPlaced) return;
+
+                state.helmetPlaced = true;
+                this.showSyncGlow();
+                this.showToast('DEVICE SYNCED · OBJECT PROJECTED');
+                this.startRotation();
+            });
         },
 
         showSyncGlow() {
@@ -211,13 +279,12 @@ window.InterfaceManager = (() => {
             if (helmet) {
                 gsap.killTweensOf(helmet.object3D.rotation);
                 gsap.to(helmet.object3D.rotation, { y: Math.PI * 2, duration: 20, repeat: -1, ease: "none" });
-                gsap.to(helmet.object3D.position, { y: "+=0.03", duration: 3, repeat: -1, yoyo: true, ease: "power1.inOut" });
             }
         },
 
         stopRotation() {
             const helmet = $('helmet');
-            if (helmet) gsap.killTweensOf([helmet.object3D.rotation, helmet.object3D.position]);
+            if (helmet) gsap.killTweensOf(helmet.object3D.rotation);
         },
 
         startTelemetry() {
@@ -307,17 +374,13 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // 2. GSAP Inline Preview
-    const previewHelmet = $('preview-helmet');
-    if (previewHelmet) {
-        previewHelmet.addEventListener('model-loaded', () => {
-            gsap.to(previewHelmet.object3D.rotation, { y: Math.PI * 2, duration: 15, repeat: -1, ease: "none" });
-            gsap.to(previewHelmet.object3D.position, { y: "-=0.05", duration: 3, repeat: -1, yoyo: true, ease: "power1.inOut" });
-            
-            // Hide loader once the first 3D asset is ready
+    window.InterfaceManager._bindXRSceneEvents();
+
+    window.addEventListener('message', event => {
+        if (event.data && event.data.type === 'preview-ready') {
             setTimeout(() => window.InterfaceManager.hideLoader(), 500);
-        });
-    }
+        }
+    });
 
     // Safety fallback: Hide loader after a timeout anyway
     window.onload = () => {

@@ -1028,22 +1028,9 @@
                             <span>|</span>
                             <span id="poly-count">POLY 150K</span>
                         </div>
-                        <!-- Embedded mini A-Frame for the inline preview -->
-                        <a-scene id="preview-scene" embedded style="width:100%;height:100%;display:block;"
-                            vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"
-                            renderer="antialias: true; alpha: true; colorManagement: true; exposure: 1.5">
-                            <a-assets>
-                                <a-asset-item id="preview-helmet"
-                                    src="https://modelviewer.dev/shared-assets/models/glTF-Sample-Assets/Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"></a-asset-item>
-                            </a-assets>
-                            <a-light type="ambient" color="#aaccff" intensity="0.6"></a-light>
-                            <a-light type="point" color="#00dcff" intensity="2.5" position="2 3 2"></a-light>
-                            <a-light type="point" color="#ff6b2b" intensity="0.8" position="-2 -1 1"></a-light>
-                            <a-entity id="preview-helmet" gltf-model="#preview-helmet" scale="1.1 1.1 1.1" position="0 0 -2">
-                            </a-entity>
-                            <a-camera position="0 0 0" look-controls="enabled: false"
-                                wasd-controls="enabled: false"></a-camera>
-                        </a-scene>
+                        <iframe id="preview-frame" title="AERO-G1 preview" src="./preview.html"
+                            style="width:100%;height:100%;display:block;border:0;background:transparent;"
+                            loading="lazy" allow="xr-spatial-tracking; accelerometer; gyroscope; fullscreen"></iframe>
                     </div>
                 </div>
 
@@ -1084,7 +1071,8 @@
     <!-- Full WebXR Scene (hidden until launch) -->
         <a-scene id="xr-scene" style="display: none;" embedded vr-mode-ui="enabled: false; cardboardModeEnabled: false"
         device-orientation-permission-ui="enabled: false"
-        webxr="requiredFeatures: hit-test, local-floor; optionalFeatures: dom-overlay; overlayElement: #ui-overlay;"
+        webxr="requiredFeatures: local-floor; optionalFeatures: hit-test, dom-overlay; overlayElement: #ui-overlay;"
+        ar-hit-test="target: #product-root; enabled: true"
         renderer="antialias: true; alpha: true; colorManagement: true; exposure: 1.5; logarithmicDepthBuffer: true;"
         cursor="rayOrigin: mouse" raycaster="objects: .clickable">
 
@@ -1093,7 +1081,7 @@
                 src="https://modelviewer.dev/shared-assets/models/glTF-Sample-Assets/Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"></a-asset-item>
         </a-assets>
 
-        <a-entity id="environment"
+        <a-entity id="environment" hide-on-enter-ar
             environment="preset: threetowers; ground: hills; groundColor: #111118; active: true; lighting: none; skyType: gradient; skyColor: #000000; horizonColor: #111120; shadow: true; fog: 0.0;"></a-entity>
 
         <!-- Premium v4.4.0 High-Fidelity Lights -->
@@ -1111,9 +1099,9 @@
             material="color: #00dcff; emissive: #00dcff; emissiveIntensity: 0.6" rotation="-90 0 0">
         </a-entity>
 
-        <a-entity id="product-root" position="0 1.2 -1.8">
-            <a-entity id="helmet" gltf-model="#helmet-model" scale="0.9 0.9 0.9" class="clickable"
-                visible="false"
+        <a-entity id="product-root" position="0 1.2 -1.8" visible="false">
+            <a-entity id="helmet" gltf-model="#helmet-model" position="0 0 0" scale="0.9 0.9 0.9" class="clickable"
+                visible="true"
                 shadow="cast: true; receive: true">
             </a-entity>
         </a-entity>
