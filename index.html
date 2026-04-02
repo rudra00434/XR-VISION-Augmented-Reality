@@ -518,6 +518,109 @@
             animation: fadeUp 0.7s 0.4s ease both;
         }
 
+        .model-selector {
+            display: grid;
+            gap: 1rem;
+            padding: 1.15rem 1.2rem 1.25rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background:
+                linear-gradient(145deg, rgba(0, 220, 255, 0.08), rgba(255, 107, 43, 0.05)),
+                rgba(8, 8, 15, 0.82);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 18px 42px rgba(0, 0, 0, 0.28);
+            animation: fadeUp 0.7s 0.5s ease both;
+        }
+
+        .model-selector-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: start;
+        }
+
+        .selector-kicker {
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--cyan);
+        }
+
+        .selector-title {
+            margin-top: 0.35rem;
+            font-family: var(--font-head);
+            font-size: 1.1rem;
+            letter-spacing: 0.06em;
+        }
+
+        .selector-tag {
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--orange);
+            white-space: nowrap;
+        }
+
+        .selector-copy {
+            color: var(--muted);
+            font-size: 0.96rem;
+            line-height: 1.65;
+        }
+
+        .model-pill-row {
+            display: flex;
+            gap: 0.7rem;
+            flex-wrap: wrap;
+        }
+
+        .model-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.55rem;
+            min-width: 150px;
+            padding: 0.85rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.02);
+            color: var(--white);
+            cursor: pointer;
+            transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s, background 0.18s;
+        }
+
+        .model-pill:hover {
+            transform: translateY(-2px);
+            border-color: var(--border-bright);
+            box-shadow: 0 0 24px rgba(0, 220, 255, 0.12);
+        }
+
+        .model-pill.active {
+            border-color: rgba(0, 220, 255, 0.78);
+            background: rgba(0, 220, 255, 0.12);
+            box-shadow: 0 0 28px rgba(0, 220, 255, 0.16);
+        }
+
+        .model-pill strong,
+        .model-pill span {
+            pointer-events: none;
+        }
+
+        .model-pill strong {
+            font-family: var(--font-head);
+            font-size: 0.74rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .model-pill span {
+            font-family: var(--font-mono);
+            font-size: 0.55rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
         /* ── BUTTONS ── */
         .btn-launch {
             position: relative;
@@ -655,6 +758,23 @@
             letter-spacing: 0.22em;
             text-transform: uppercase;
             color: var(--cyan-dim);
+        }
+
+        .model-hud-side {
+            position: absolute;
+            top: 58px;
+            right: 22px;
+            z-index: 5;
+            padding: 0.45rem 0.7rem;
+            border: 1px solid rgba(255, 107, 43, 0.26);
+            border-radius: 999px;
+            background: rgba(8, 8, 15, 0.7);
+            font-family: var(--font-mono);
+            font-size: 0.56rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--orange);
+            backdrop-filter: blur(10px);
         }
 
         .model-hud-bottom {
@@ -925,6 +1045,15 @@
                 padding: 1.2rem 1.4rem;
                 gap: 1.4rem;
             }
+
+            .model-selector-head {
+                flex-direction: column;
+            }
+
+            .model-pill {
+                flex: 1 1 100%;
+                min-width: 0;
+            }
         }
     </style>
 </head>
@@ -979,8 +1108,9 @@
                         <span class="line2">HYBRID</span>
                     </h1>
                     <p class="hero-desc">
-                        Experience the flagship helmet in a photorealistic virtual gallery — or anchor it to your real
-                        world with AR hit-testing. No app, no download. Just open your browser and step in.
+                        Switch between the flagship helmet and a full-body Sentinel robot in one cinematic XR showcase.
+                        Launch either asset into the virtual gallery or anchor it into your real world with AR
+                        hit-testing.
                     </p>
 
                     <div class="hero-specs">
@@ -1010,6 +1140,30 @@
                             🥽 &nbsp;VIRTUAL GALLERY
                         </button>
                     </div>
+
+                    <div class="model-selector">
+                        <div class="model-selector-head">
+                            <div>
+                                <div class="selector-kicker">Showcase Loadout</div>
+                                <div class="selector-title" id="active-model-name">AERO-G1 Helmet</div>
+                            </div>
+                            <div class="selector-tag" id="active-model-tag">Tactical Helmet</div>
+                        </div>
+                        <p class="selector-copy" id="active-model-copy">
+                            Reflective carbon-shell visor tuned for premium lighting, close-up materials, and floating
+                            AR placement.
+                        </p>
+                        <div class="model-pill-row">
+                            <button class="model-pill active" data-model="helmet" type="button">
+                                <strong>Helmet Core</strong>
+                                <span>AERO-G1</span>
+                            </button>
+                            <button class="model-pill" data-model="robot" type="button">
+                                <strong>Robot Unit</strong>
+                                <span>Sentinel-R7</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Right: 3D model via model-viewer fallback -->
@@ -1019,7 +1173,8 @@
                         <div class="model-corner tr"></div>
                         <div class="model-corner bl"></div>
                         <div class="model-corner br"></div>
-                        <div class="model-hud-top">OBJECT · AERO-G1 · GLB</div>
+                        <div class="model-hud-top" id="model-hud-top">OBJECT · AERO-G1 HELMET · GLB</div>
+                        <div class="model-hud-side" id="frame-model-tag">TACTICAL HELMET</div>
                         <div class="scan-line"></div>
                         <div class="model-hud-bottom">
                             <span>ROT 0.00°</span>
@@ -1041,7 +1196,7 @@
         <div class="feature-strip">
             <div class="feature-item"><span class="feature-icon">◈</span>WebXR Hit-Test AR</div>
             <div class="strip-divider"></div>
-            <div class="feature-item"><span class="feature-icon">◈</span>glTF PBR Rendering</div>
+            <div class="feature-item"><span class="feature-icon">◈</span>Dual-Asset Showcase</div>
             <div class="strip-divider"></div>
             <div class="feature-item"><span class="feature-icon">◈</span>Real-time Shadow Casting</div>
             <div class="strip-divider"></div>
@@ -1053,6 +1208,7 @@
         <!-- XR Controls (shown when scene active) -->
         <div id="xr-controls">
             <div class="xr-badge" id="xr-mode-label">XR MODE ACTIVE</div>
+            <div class="xr-badge" id="xr-model-label">ASSET · AERO-G1 HELMET</div>
             <button class="btn-exit" id="exit-xr">EXIT EXPERIENCE</button>
         </div>
 
@@ -1079,6 +1235,8 @@
         <a-assets>
             <a-asset-item id="helmet-model"
                 src="https://modelviewer.dev/shared-assets/models/glTF-Sample-Assets/Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"></a-asset-item>
+            <a-asset-item id="robot-model"
+                src="https://modelviewer.dev/shared-assets/models/RobotExpressive.glb"></a-asset-item>
         </a-assets>
 
         <a-entity id="environment" hide-on-enter-ar
@@ -1099,8 +1257,8 @@
             material="color: #00dcff; emissive: #00dcff; emissiveIntensity: 0.6" rotation="-90 0 0">
         </a-entity>
 
-        <a-entity id="product-root" position="0 1.2 -1.8" visible="false">
-            <a-entity id="helmet" gltf-model="#helmet-model" position="0 0 0" scale="0.9 0.9 0.9" class="clickable"
+        <a-entity id="product-root" position="0 0 -1.8" visible="false">
+            <a-entity id="showcase-model" gltf-model="#helmet-model" position="0 1.2 0" scale="0.9 0.9 0.9" class="clickable"
                 visible="true"
                 shadow="cast: true; receive: true">
             </a-entity>
@@ -1233,18 +1391,33 @@
 
         /* ── XR LAUNCH/EXIT (Managed in main.js) ── */
 
-        /* ── HELMET CLICK IN XR ── */
-        const helmet = document.getElementById('helmet');
-        if (helmet) {
-            helmet.addEventListener('click', () => {
-                helmet.setAttribute('animation__scale', {
-                    property: 'scale', from: '0.9 0.9 0.9', to: '1.15 1.15 1.15',
-                    dur: 200, easing: 'easeOutQuad', autoplay: true
+        /* ── MODEL CLICK IN XR ── */
+        const showcaseModel = document.getElementById('showcase-model');
+        if (showcaseModel) {
+            showcaseModel.addEventListener('click', () => {
+                const current = showcaseModel.getAttribute('scale') || { x: 1, y: 1, z: 1 };
+                const expanded = {
+                    x: current.x * 1.16,
+                    y: current.y * 1.16,
+                    z: current.z * 1.16
+                };
+
+                showcaseModel.setAttribute('animation__scale', {
+                    property: 'scale',
+                    from: `${current.x} ${current.y} ${current.z}`,
+                    to: `${expanded.x} ${expanded.y} ${expanded.z}`,
+                    dur: 200,
+                    easing: 'easeOutQuad',
+                    autoplay: true
                 });
                 setTimeout(() => {
-                    helmet.setAttribute('animation__scale', {
-                        property: 'scale', from: '1.15 1.15 1.15', to: '0.9 0.9 0.9',
-                        dur: 300, easing: 'easeInOutQuad', autoplay: true
+                    showcaseModel.setAttribute('animation__scale', {
+                        property: 'scale',
+                        from: `${expanded.x} ${expanded.y} ${expanded.z}`,
+                        to: `${current.x} ${current.y} ${current.z}`,
+                        dur: 300,
+                        easing: 'easeInOutQuad',
+                        autoplay: true
                     });
                 }, 220);
             });
