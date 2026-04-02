@@ -59,7 +59,10 @@ html, body {
   opacity: 0; transition: opacity 0.6s ease; pointer-events: none;
 }
 #cam-bg.cam-visible { opacity: 1; }
-body.cam-active a-scene canvas { background: transparent !important; }`n`na-scene { position: fixed; inset: 0; z-index: 50 !important; }`n#ui-overlay { position: fixed; inset: 0; z-index: 100 !important; pointer-events: none !important; }`n`n#ui-overlay button, #ui-overlay .nav-pill, #ui-overlay .hero-actions, .clickable { pointer-events: auto !important; }
+body.cam-active a-scene canvas { background: transparent !important; }
+a-scene { position: fixed; inset: 0; z-index: 50 !important; }
+#ui-overlay { position: fixed; inset: 0; z-index: 100 !important; pointer-events: none !important; }
+#ui-overlay button, #ui-overlay .nav-pill, #ui-overlay .hero-actions, .clickable { pointer-events: auto !important; }
 
 /* ─────────────────────────────────────────────────────────────
    LOADING SCREEN
